@@ -1,0 +1,27 @@
+name: Deploy
+
+on:
+  # Triggers the workflow on push events but only for the master branch
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare deployment
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          DEPLOY_SERVER_IP: ${{ secrets.DEPLOY_SERVER_IP }}
+        run: |
+             mkdir -p ~/.ssh
+             chmod 700 ~/.ssh
+             echo -e "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+             chmod 600 ~/.ssh/id_rsa
+             ssh-keyscan -t rsa $DEPLOY_SERVER_IP >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        env:
+          DEPLOY_SERVER_IP: ${{ secrets.DEPLOY_SERVER_IP }}
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+        run: ssh -t deployer@$DEPLOY_SERVER_IP "cd $DEPLOY_DIR && git checkout . && git checkout master && git fetch --all && git reset --hard origin/master && git pull && rm -rf data/*.pickle && bash -ic '{ cd $DEPLOY_DIR && ./daemon_run.sh ;} & disown'"

@@ -107,8 +107,10 @@ venv.bak/
 db.pickle
 cache.pickle
 
-nohup.out
+nohup.out*
 secrets.py
 charts/*.png
 
 log/*.log
+
+daemon.pid
