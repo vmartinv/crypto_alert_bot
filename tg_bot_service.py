@@ -6,11 +6,10 @@ from requests.adapters import HTTPAdapter
 import logger_config
 import config
 from repository.market import MarketRepository
-from formating import format_price
-from api.binance_rest import CandleInterval
 from command_handler import CommandHandler
 from custom_handler import CustomHandler
 from tg_api import TgApi
+from sqlitedict import SqliteDict
 
 class TgBotService(object):
     def processMessage(self, message):
@@ -45,15 +44,10 @@ class TgBotService(object):
 
     def run(self):
         self.log = logger_config.instance
-        try:
-            with open(config.DB_FILENAME, 'rb') as fp:
-                self.db = pickle.load(fp)
-        except:
-            self.log.error("error loading db, defaulting to empty db")
-            self.db = {}
+        self.db = SqliteDict(config.DB_FILENAME)
         self.api = TgApi(self.log)
         self.repository = MarketRepository(self.log)
-        self.customHandler = CustomHandler(self.db, self.repository)
+        self.customHandler = CustomHandler(self.db, self.repository, self.api)
         self.command_handler = CommandHandler(self.api, self.repository, self.db, self.log, self.customHandler)
 
         self.log.debug("db at start: {}".format(self.db))
@@ -79,7 +73,7 @@ class TgBotService(object):
                 self.log.exception("exception at processing updates")
                 loop = False
 
-            self.persist_db()
+            self.db.commit()
 
 if __name__ == "__main__":
     service = TgBotService()

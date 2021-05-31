@@ -2,7 +2,10 @@ from lark import Lark, Tree, Transformer
 from collections import defaultdict
 import logger_config
 from repository.market import MarketRepository
-from datetime import datetime
+from datetime import datetime, timedelta
+from sqlitedict import SqliteDict
+from statistics import mean
+import types
 
 class Evaluator(Transformer):
 
@@ -32,6 +35,17 @@ class Evaluator(Transformer):
     def percentage(self, x):
         return float(x[0])/100
 
+    def MATH_OPERATOR(self, c):
+        if c=='+':
+            return lambda a,b: a+b
+        elif c=='-':
+            return lambda a,b: a-b
+        elif c=='*':
+            return lambda a,b: a*b
+        elif c=='/':
+            return lambda a,b: a/b
+        raise Exception(f"Unknown MATH_OPERATOR {c}")
+
     def COMPARATOR(self, c):
         if c=='>':
             return lambda a,b: a>b
@@ -53,12 +67,31 @@ class Evaluator(Transformer):
     def pair(self, args):
         return (args[0].upper(), args[1].upper())
 
-    def time_dep_value(self, args):
-        ind, (fsym, tsym) = args
-        if ind=='price':
-            return lambda t: self.repository.get_price(fsym, tsym, t)
-        # elif c=='or':
-        #     return lambda a,b: a or b
+    def price(self, args):
+        fsym, tsym = args[0]
+        return lambda t: self.repository.get_values(fsym, tsym, t)['open']
+
+    def ema(self, args):
+        (fsym, tsym), window, interval = args
+        window = int(window)
+        def calc(time):
+            time = time.replace(second = 0, microsecond =0)
+            # time = time.replace(minute = 0)
+            sma_first = time - timedelta(minutes = window*interval*2)
+            averages = [self.repository.get_values(fsym, tsym, sma_first + timedelta(minutes = (x+1)*interval - 1))['close'] for x in range(window)]
+            sma = mean(averages)
+            ema = sma
+            weight = 2.0 / (1+window)
+            # print(f"calculating ema for window={window} , interval={interval}, pair={fsym}/{tsym}, time={time}")
+            ema_first = time - timedelta(minutes = window*interval)
+            # print(f"SMA {ema}")
+            for x in range(window):
+                cur = ema_first + timedelta(minutes = (x+1)*interval - 1)
+                today = self.repository.get_values(fsym, tsym, cur)['close']
+                ema = today * weight + ema * (1 - weight)
+                # print(f"EMA({x}) {ema} (cur={cur}, today={today})")
+            return ema
+        return calc
 
     def current(self, args):
         return args[0](datetime.now())
@@ -68,41 +101,81 @@ class Evaluator(Transformer):
             return False
         return cond[1](cond[0], cond[2])
 
+    def math_op(self, args):
+        return lambda t: args[1](args[0](t), args[2](t))
+
+    def absolut(self, args):
+        return lambda t: abs(args[0](t))
+
     def custom(self, args):
         name, cond = args
         return cond
 
 class CustomHandler:
-    def __init__(self, db, repository):
+    def __init__(self, db, repository, api):
         self.db = db
+        self.api = api
+        if 'chats' not in self.db:
+            self.db['chats'] = set()
         self.evaluator = Evaluator(repository=repository, visit_tokens=True)
-        if 'customs' not in self.db:
-            self.db['customs'] = defaultdict(lambda: defaultdict(lambda: []))
+
+    @staticmethod
+    def db_key(chatId):
+        return f'{chatId}-customs'
 
     def create(self, chatId, command):
-        parsed = CustomHandler.PARSER.parse(command)
+        command = command.strip()
+        parsed = CustomHandler.CUSTOM_PARSER.parse(command)
         name = CustomHandler.get_name(parsed)
-        self.db['customs'][chatId][name] = (command, parsed)
+        key = CustomHandler.db_key(chatId)
+        if key not in self.db:
+            self.db[key] = {}
+            tmp = set(self.db['chats'])
+            tmp.add(chatId)
+            self.db['chats'] = tmp
+        tmp = dict(self.db[key])
+        tmp[name] = (command, parsed, datetime.now())
+        self.db[key] = tmp
         return f'Alert {name} created! Use /remove {name} to erase it'
 
+    def eval(self, chatId, command):
+        command = command.strip()
+        parsed = CustomHandler.VALUE_PARSER.parse(command)
+        value = self.evaluator.transform(parsed)
+        return f'Result: {value}'
+
+    def cleanup_check(self, chatId):
+        key = CustomHandler.db_key(chatId)
+        if key in self.db and len(self.db[key])==0:
+            del self.db[key]
+        if key not in self.db:
+            tmp = set(self.db['chats'])
+            tmp.discard(chatId)
+            self.db['chats'] = tmp
+
     def remove(self, chatId, custom):
+        custom = custom.strip()
+        key = CustomHandler.db_key(chatId)
         if not custom:
-            del self.db['customs'][chatId]
+            del self.db[key]
+            self.cleanup_check(chatId)
             return 'All alerts removed'
-        if custom in self.db['customs'][chatId]:
-            del self.db['customs'][chatId][custom]
-            if len(self.db['customs'][chatId])==0:
-                del self.db['customs'][chatId]
+        if custom in self.db[key]:
+            tmp = dict(self.db[key])
+            del tmp[custom]
+            self.db[key] = tmp
+            self.cleanup_check(chatId)
             return 'Alert removed'
         else:
             return 'Alert not found'
 
 
     def list(self, chatId):
-        if chatId in self.db['customs'] and len(self.db['customs'][chatId])>0:
+        key = CustomHandler.db_key(chatId)
+        if key in self.db:
             msg = 'Current alerts:\n'
-            for str,_ in self.db['customs'][chatId].values():
-                msg+=f"{str}\n\n"
+            for name,(cmd,_,_) in self.db[key].items():
+                msg+=f"- {cmd}\n\n"
             return msg
         else:
             return 'No alert is set'
@@ -112,13 +185,20 @@ class CustomHandler:
         return custom.children[0]
 
     def process(self):
-        for chatId, customs in self.db['customs'].items():
-            for name,(str,parsed) in customs.items():
-                if self.evaluator.transform(parsed):
-                    self.api.sendMessage(f'The alert {name} was triggered (defined as {str})', chatId)
+        for chatId in self.db['chats']:
+            key = CustomHandler.db_key(chatId)
+            toUpdate = []
+            for name,(str,parsed,ts) in self.db[key].items():
+                if ts < datetime.now() and self.evaluator.transform(parsed):
+                    self.api.sendMessage(f'The alert {name} was triggered!! (defined as {str})', chatId)
+                    toUpdate.append(name)
+            tmp = dict(self.db[key])
+            for name in toUpdate:
+                tmp[name] = (tmp[name][0], tmp[name][1], datetime.now() + timedelta(hours = 1))
+            self.db[key] = tmp
 
 
-    PARSER = Lark(r"""
+    DSL = r"""
         ?symbol : WORD
         pair: symbol "/" symbol
         TWO_DIGITS: DIGIT DIGIT?
@@ -137,9 +217,15 @@ class CustomHandler:
             | "or"
         number: SIGNED_NUMBER
         percentage: SIGNED_NUMBER "%"
-        INDICATOR: "price"
-            // | "rsi"
-        time_dep_value: INDICATOR "(" pair ")"
+        MATH_OPERATOR: "-"
+            | "+"
+            | "*"
+            | "/"
+        ?time_dep_value: "price" "(" pair ")" -> price
+            | "ema" "(" pair "," number "," time_interval ")"         -> ema
+            | time_dep_value MATH_OPERATOR time_dep_value -> math_op
+            | "abs" "(" time_dep_value ")" -> absolut
+            // | "rsi" "(" pair "," time_interval "," number ")"         -> rsi
             // | "change" "(" time_dep_value ("," time_interval)? ")"      -> change
         ?value: percentage
             | number
@@ -158,25 +244,39 @@ class CustomHandler:
         %import common.SIGNED_NUMBER
         %import common.WS
         %ignore WS
-        """, start='custom', parser='lalr')
+        """
+    CUSTOM_PARSER = Lark(DSL, start='custom', parser='lalr')
+    VALUE_PARSER = Lark(DSL, start='value', parser='lalr')
 
 
 if __name__ == "__main__":
     log = logger_config.instance
     repository = MarketRepository(log)
     examples = [
-        "martin price(btc/usd) > 20",
-        "clouds price(btc/usd) > 20%",
-        "tree (price(btc/usd) > 20%)",
+        "martin price(btc/busd) > 20",
+        "clouds price(btc/busd) > 20%",
+        "tree (price(btc/busd) > 20%)",
         # "_no price(btc/usd) > 100 and change(price(btc/usd), 24h) > 10% ",
-        "yes change(price(btc/usd), 24h) >10%",
+        # "yes change(price(btc/usd), 24h) >10%",
         # "x123 max(change(price(btc/usd), 24h), 24h)>10% and change(price(btc/usd), 10m)>-5%",
-        "num (price(btc/usd) > 200)",
+        "num (price(btc/busd) > 200)",
+        "ema_test ema(eth/busd, 7, 1h) > 200",
+        "ema_test ema(eth/busd, 25, 1h) > 200",
+        # "ema_test ema(eth/busd, 200, 1h) > 200",
+        "ema_test abs(ema(eth/busd, 7, 1h) - ema(eth/busd, 25, 1h)) < 0.1",
     ]
     for example in examples:
         print(example)
-        custom = CustomHandler.PARSER.parse(example)
+        custom = CustomHandler.CUSTOM_PARSER.parse(example)
         print(custom)
-        print(CustomHandler.get_name(custom))
+        print(Evaluator(repository=repository, visit_tokens=True).transform(custom))
+        print()
+    examples_eval = [
+        "abs(ema(eth/busd, 7, 1h) - ema(eth/busd, 25, 1h))",
+    ]
+    for example in examples_eval:
+        print(example)
+        custom = CustomHandler.VALUE_PARSER.parse(example)
+        print(custom)
         print(Evaluator(repository=repository, visit_tokens=True).transform(custom))
         print()

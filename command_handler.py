@@ -6,8 +6,6 @@ from requests.adapters import HTTPAdapter
 
 from repository.market import MarketRepository
 import config
-from formating import format_price
-from api.binance_rest import CandleInterval
 
 
 class CommandHandler:
@@ -18,6 +16,8 @@ class CommandHandler:
         self.api = api
         self.log = log
         self.customHandler = customHandler
+        with open(config.HELP_FILENAME, 'r') as fp:
+            self.help_file = fp.read()
 
     def dispatch(self, message):
             text = message['text']
@@ -29,10 +29,12 @@ class CommandHandler:
                 self.help(chatId, command)
             elif command == 'list':
                 self.list(chatId, command)
-            elif command=='remove':
+            elif command.startswith('remove'):
                 self.remove(chatId, command)
-            elif command.startswith('new'):
+            elif command.startswith('create'):
                 self.create(chatId, command)
+            elif command.startswith('eval'):
+                self.eval(chatId, command)
             else:
                 self.api.sendMessage('Unknown command', chatId)
 
@@ -41,14 +43,16 @@ class CommandHandler:
         self.api.sendMessage(self.customHandler.remove(chatId, command), chatId)
 
     def create(self, chatId, command):
-        command = command[len("new"):]
+        command = command[len("create"):]
         self.api.sendMessage(self.customHandler.create(chatId, command), chatId)
+
+    def eval(self, chatId, command):
+        command = command[len("eval"):]
+        self.api.sendMessage(self.customHandler.eval(chatId, command), chatId)
 
     def help(self, chatId, command):
         self.log.info("reading help file")
-        with open(config.HELP_FILENAME, 'rb') as fp:
-            resp = fp.read()
-        self.api.sendMessage(resp, chatId, "Markdown")
+        self.api.sendMessage(self.help_file, chatId, "Markdown")
 
     def list(self, chatId, command):
         self.api.sendMessage(self.customHandler.list(chatId), chatId)
