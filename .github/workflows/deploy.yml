@@ -24,4 +24,4 @@ jobs:
         env:
           DEPLOY_SERVER_IP: ${{ secrets.DEPLOY_SERVER_IP }}
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
-        run: ssh -t deployer@$DEPLOY_SERVER_IP "cd $DEPLOY_DIR && git checkout . && git checkout master && git fetch --all && git reset --hard origin/master && git pull && rm -rf data/*.sqlite && bash -ic '{ cd $DEPLOY_DIR && ./daemon_run.sh ;} & disown'"
+        run: ssh -t deployer@$DEPLOY_SERVER_IP "cd $DEPLOY_DIR && git checkout . && git checkout master && git fetch --all && git reset --hard origin/master && git pull && bash -ic '{ cd $DEPLOY_DIR && ./daemon_run.sh ;} & disown'"
