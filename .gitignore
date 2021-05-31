@@ -107,6 +107,8 @@ venv.bak/
 db.pickle
 cache.pickle
 
+*.sqlite
+
 nohup.out*
 secrets.py
 charts/*.png
