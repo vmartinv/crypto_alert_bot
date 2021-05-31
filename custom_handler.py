@@ -125,7 +125,14 @@ class CustomHandler:
 
     def create(self, chatId, command):
         command = command.strip()
-        parsed = CustomHandler.CUSTOM_PARSER.parse(command)
+        try:
+            parsed = CustomHandler.CUSTOM_PARSER.parse(command)
+        except Exception as err:
+            return f'Error while parsing the expression: {err}'
+        try:
+            value = self.evaluator.transform(parsed)
+        except Exception as err:
+            return f'Error while evaluating the expression: {err}'
         name = CustomHandler.get_name(parsed)
         key = CustomHandler.db_key(chatId)
         if key not in self.db:
@@ -136,12 +143,22 @@ class CustomHandler:
         tmp = dict(self.db[key])
         tmp[name] = (command, parsed, datetime.now())
         self.db[key] = tmp
-        return f'Alert {name} created! Use /remove {name} to erase it'
+        msg = f'Alert {name} created! Use /remove {name} to erase it.'
+        if value:
+            msg += '\nWARNING: alert already triggering'
+        return msg
+
 
     def eval(self, chatId, command):
         command = command.strip()
-        parsed = CustomHandler.VALUE_PARSER.parse(command)
-        value = self.evaluator.transform(parsed)
+        try:
+            parsed = CustomHandler.VALUE_PARSER.parse(command)
+        except Exception as err:
+            return f'Error while parsing the expression: {err}'
+        try:
+            value = self.evaluator.transform(parsed)
+        except Exception as err:
+            return f'Error while evaluating the expression: {err}'
         return f'Result: {value}'
 
     def cleanup_check(self, chatId):

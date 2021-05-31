@@ -116,3 +116,4 @@ charts/*.png
 log/*.log
 
 daemon.pid
+.DS_Store

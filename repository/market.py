@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import math
 import collections
 import os
+from exceptions import InvalidPairException
 from secrets import CC_API_KEY
 os.environ['CRYPTOCOMPARE_API_KEY'] = CC_API_KEY
 from cryptocompare import cryptocompare
@@ -71,8 +72,7 @@ class MarketRepository(object):
 
     def get_values(self, fsym, tsym, time):
         if not self.is_pair_valid(fsym, tsym):
-            self.log.debug(f"price pair not valid {fsym} {tsym}")
-            return None
+            raise InvalidPairException(fsym, tsym)
         time = time.replace(second=0, microsecond=0)
         key = f'{fsym}/{tsym}@{int(time.timestamp())}'
         if key not in self.db:
