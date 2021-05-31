@@ -25,3 +25,6 @@ Clear all alerts.
 
 **/help**  
 See this message.
+
+**Source**
+https://github.com/vmartinv/price_alert_bot/
