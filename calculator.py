@@ -8,35 +8,33 @@ class Calculator:
         self.repository = repository
         self.log = logger_config.get_logger(__name__)
 
-    def price(self, fsym, tsym, t):
-        return self.repository.get_values(fsym, tsym, t)['close']
+    def price(self, fsym, tsym, candle, t):
+        return self.repository.get_values(fsym, tsym, t)[candle]
 
+    def change(self, fun, interval, t):
+        old = fun(t-timedelta(minutes=interval))
+        return (fun(t)-old)/old
 
-    def sma(self, fun, window, interval, time):
+    @staticmethod
+    def adj(upwards, v):
+        if upwards is not None and (v>0 and not upwards) or (v<0 and upwards):
+            return 0
+        return v
+
+    def sma(self, fun, window, interval, time, upwards=None):
         sma_first = time - timedelta(minutes = window*interval)
-        sum_closes = sum(fun(sma_first + timedelta(minutes = (x+1)*interval - 1)) for x in range(window))
+        sum_closes = sum(Calculator.adj(upwards, fun(sma_first + timedelta(minutes = (x+1)*interval - 1))) for x in range(window))
         return sum_closes / window
 
-    def ema(self, fun, window, interval, time, rec):
-        ema_prev = time - timedelta(minutes = interval)
-        prev = rec(ema_prev)
-        weight = 2.0 / (1+window)
-        if prev is not None:
-            self.log.info(f"Reusing last ema for window={window}, interval={interval}, time={time}")
-            ema = prev
-            today = fun(time - timedelta(minutes = 1))
-            new_ema = today * weight + ema * (1 - weight)
-            # self.log.info(f"Obtained ema of {new_ema}")
-            return new_ema
-        else:
-            # time = time.replace(minute = 0)
-            ema_first = time - timedelta(minutes = window*interval*2)
-            ema = self.sma(fun, window, interval, ema_first)
-            self.log.info(f"calculating ema for window={window} , interval={interval}, time={time}")
-            # self.log.debug(f"SMA {ema}")
-            for x in range(window*2):
-                cur = ema_first + timedelta(minutes = (x+1)*interval - 1)
-                today = fun(cur)
-                ema = today * weight + ema * (1 - weight)
-                # self.log.debug(f"EMA({x}) {ema} (cur={cur}, today={today})")
-            return ema
+    def smma(self, fun, window, interval, time, rec, alpha, upwards=None):
+        smma_prev = time - timedelta(minutes = interval)
+        smma = rec(smma_prev)
+        if smma is None:
+            self.log.info(f"Calculating smma from scratch for window={window}, interval={interval}, time={time}")
+            smma_prev = time - timedelta(minutes = window*interval*2)
+            smma = self.sma(fun, window, interval, smma_prev, upwards=upwards)
+        while smma_prev < time:
+            smma_prev += timedelta(minutes = interval)
+            today = Calculator.adj(upwards, fun(smma_prev))
+            smma = today * alpha + smma * (1-alpha)
+        return smma

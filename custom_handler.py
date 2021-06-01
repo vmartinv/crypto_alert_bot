@@ -15,6 +15,7 @@ class Evaluator(Transformer):
 
     def __init__(self, calculator, *args, **kwargs):
         super(Evaluator, self).__init__(*args, **kwargs)
+        self.log = logger_config.get_logger(__name__)
         self.calculator = calculator
         self.db = SqliteDict(HANDLER_CACHE_DB_FILENAME, autocommit=True)
 
@@ -24,6 +25,7 @@ class Evaluator(Transformer):
     WORD = str
     INDICATOR = str
     SIGNED_NUMBER = float
+    CANDLE_VALS = str
 
     def number(self, x):
         return (None, lambda t: float(x[0]))
@@ -93,10 +95,19 @@ class Evaluator(Transformer):
         return (desc, mem_fun)
 
     def price(self, args):
-        fsym, tsym = args[0]
+        candle, (fsym, tsym) = args
+        if candle == 'price':
+            candle = 'close'
         return (
-            f"p:{fsym}/{tsym}",
-            lambda t: self.calculator.price(fsym, tsym, Evaluator.normalize_time(t))
+            f"{candle}:{fsym}/{tsym}",
+            lambda t: self.calculator.price(fsym, tsym, candle, Evaluator.normalize_time(t))
+        )
+
+    def change(self, args):
+        (desc, fun), interval = args
+        return (
+            f"change:({desc}):{interval}",
+            lambda t: self.calculator.change(fun, interval, t)
         )
 
     def ema(self, args):
@@ -104,8 +115,8 @@ class Evaluator(Transformer):
         if not desc:
             raise InvalidIndicatorSource("ema")
         return self.memoize(
-            f"ema:{desc}:{window}:{interval}",
-            lambda t,rec: self.calculator.ema(fun, window, interval, t, rec)
+            f"ema:({desc}):{window}:{interval}",
+            lambda t,rec: self.calculator.smma(fun, window, interval, t, rec, alpha=2.0/(window+1), upwards=None)
         )
 
     def sma(self, args):
@@ -113,8 +124,37 @@ class Evaluator(Transformer):
         if not desc:
             raise InvalidIndicatorSource("sma")
         return self.memoize(
-            f"sma:{desc}:{window}:{interval}",
+            f"sma:({desc}):{window}:{interval}",
             lambda t,_: self.calculator.sma(fun, window, interval, t)
+        )
+
+    def smma(self, args, upwards=None):
+        (desc, fun), window, interval = args
+        if not desc:
+            raise InvalidIndicatorSource("smma")
+        return self.memoize(
+            f"smma:({desc}):{window}:{interval}:{upwards}",
+            lambda t,rec: self.calculator.smma(fun, window, interval, t, rec, upwards=upwards, alpha=1.0/window)
+        )
+
+    def rsi(self, args):
+        child, window, interval = args
+        (desc, fun) = child
+        if not desc:
+            raise InvalidIndicatorSource("rsi")
+        def calc(t):
+            change = self.change([child, interval])
+            _, rs_up = self.smma([change, window, interval], True)
+            rs_up = rs_up(t)
+            _, rs_down = self.smma([change, window, interval], False)
+            rs_down = abs(rs_down(t))
+            self.log.debug(f"Computing rsi:({desc}):{window}:{interval}, rs_up={rs_up}, rs_down={rs_down}")
+            if rs_down < 1e-9:
+                return 100.
+            return 100. - 100. / ( 1. + rs_up/rs_down)
+        return (
+            f"rsi:({desc}):{window}:{interval}",
+            calc
         )
 
     def condition(self, cond):
@@ -268,14 +308,21 @@ class CustomHandler:
             | "+"
             | "*"
             | "/"
+        CANDLE_VALS: "price"
+            | "open"
+            | "high"
+            | "low"
+            | "close"
+            | "volume"
         ?value: percentage
             | number
-            | "price" "(" pair ")" -> price
-            | "ema" "(" value "," INT "," time_interval ")"         -> ema
+            | CANDLE_VALS "(" pair ")" -> price
+            | "change" "(" value "," time_interval ")"         -> change
             | "sma" "(" value "," INT "," time_interval ")"         -> sma
+            | "ema" "(" value "," INT "," time_interval ")"         -> ema
             | value MATH_OPERATOR value -> math_op
             | "abs" "(" value ")" -> absolut
-            // | "rsi" "(" pair "," time_interval "," INT ")"         -> rsi
+            | "rsi" "(" value "," INT "," time_interval ")"         -> rsi
             // | "change" "(" value ("," time_interval)? ")"      -> change
             // | "max" "(" value "," time_interval ")"         -> max
             // | "min" "(" value "," time_interval ")"         -> min
