@@ -8,12 +8,15 @@ from statistics import mean
 from calculator import Calculator
 import logger_config
 import types
+from exceptions import InvalidIndicatorSource
+from config import HANDLER_CACHE_DB_FILENAME
 
 class Evaluator(Transformer):
 
     def __init__(self, calculator, *args, **kwargs):
         super(Evaluator, self).__init__(*args, **kwargs)
         self.calculator = calculator
+        self.db = SqliteDict(HANDLER_CACHE_DB_FILENAME, autocommit=True)
 
     INT = int
     CNAME = str
@@ -23,7 +26,7 @@ class Evaluator(Transformer):
     SIGNED_NUMBER = float
 
     def number(self, x):
-        return lambda t: float(x[0])
+        return (None, lambda t: float(x[0]))
 
     def minutes(self, x):
         return int(x[0])
@@ -35,7 +38,7 @@ class Evaluator(Transformer):
         return int(x[0])*60*24
 
     def percentage(self, x):
-        return lambda t: float(x[0])/100
+        return (None, lambda t: float(x[0])/100)
 
     def MATH_OPERATOR(self, c):
         if c=='+':
@@ -69,32 +72,66 @@ class Evaluator(Transformer):
     def pair(self, args):
         return (args[0].upper(), args[1].upper())
 
+    @staticmethod
+    def normalize_time(time):
+        return time.replace(second = 0, microsecond =0)
+
+    def memoize(self, desc, fun):
+        def rec_fun(time):
+            time = Evaluator.normalize_time(time)
+            key = f"{desc}@{time.timestamp()}"
+            if key not in self.db:
+                return None
+            return self.db[key]
+
+        def mem_fun(time):
+            time = Evaluator.normalize_time(time)
+            key = f"{desc}@{time.timestamp()}"
+            if key not in self.db:
+                self.db[key] = fun(time, rec_fun)
+            return self.db[key]
+        return (desc, mem_fun)
+
     def price(self, args):
         fsym, tsym = args[0]
-        return lambda t: self.calculator.price(fsym, tsym, t)
+        return (
+            f"p:{fsym}/{tsym}",
+            lambda t: self.calculator.price(fsym, tsym, Evaluator.normalize_time(t))
+        )
 
     def ema(self, args):
-        (fsym, tsym), window, interval = args
-        return lambda t: self.calculator.ema(fsym, tsym, int(window(t)), interval, t)
+        (desc, fun), window, interval = args
+        if not desc:
+            raise InvalidIndicatorSource("ema")
+        return self.memoize(
+            f"ema:{desc}:{window}:{interval}",
+            lambda t,rec: self.calculator.ema(fun, window, interval, t, rec)
+        )
 
     def sma(self, args):
-        (fsym, tsym), window, interval = args
-        return lambda t: self.calculator.sma(fsym, tsym, int(window(t)), interval, t)
+        (desc, fun), window, interval = args
+        if not desc:
+            raise InvalidIndicatorSource("sma")
+        return self.memoize(
+            f"sma:{desc}:{window}:{interval}",
+            lambda t,_: self.calculator.sma(fun, window, interval, t)
+        )
 
     def condition(self, cond):
-        if cond[0] is None or cond[2] is None:
-            return False
-        return lambda t: cond[1](cond[0](t), cond[2](t))
+        return (None, lambda t: cond[1](cond[0][1](t), cond[2][1](t)))
 
     def math_op(self, args):
-        return lambda t: args[1](args[0](t), args[2](t))
+        return (None, lambda t: args[1](args[0][1](t), args[2][1](t)))
 
     def absolut(self, args):
-        return lambda t: abs(args[0](t))
+        return (None, lambda t: abs(args[0][1](t)))
+
+    def expression(self, args):
+        return lambda t: args[0][1](t)
 
     def custom(self, args):
         name, cond = args
-        return cond
+        return lambda t: cond[1](t)
 
 class CustomHandler:
     def __init__(self, db, calculator, api):
@@ -234,11 +271,11 @@ class CustomHandler:
         ?value: percentage
             | number
             | "price" "(" pair ")" -> price
-            | "ema" "(" pair "," number "," time_interval ")"         -> ema
-            | "sma" "(" pair "," number "," time_interval ")"         -> sma
+            | "ema" "(" value "," INT "," time_interval ")"         -> ema
+            | "sma" "(" value "," INT "," time_interval ")"         -> sma
             | value MATH_OPERATOR value -> math_op
             | "abs" "(" value ")" -> absolut
-            // | "rsi" "(" pair "," time_interval "," number ")"         -> rsi
+            // | "rsi" "(" pair "," time_interval "," INT ")"         -> rsi
             // | "change" "(" value ("," time_interval)? ")"      -> change
             // | "max" "(" value "," time_interval ")"         -> max
             // | "min" "(" value "," time_interval ")"         -> min
@@ -246,12 +283,13 @@ class CustomHandler:
             | condition LOGICAL_OPERATOR condition
             | value COMPARATOR value
 
-        ?expression: condition
+        expression: condition
             | value
 
         custom: CNAME condition
 
         %import common.DIGIT
+        %import common.INT
         %import common.CNAME
         %import common.WORD
         %import common.SIGNED_NUMBER
