@@ -116,7 +116,7 @@ class CustomHandler:
         except Exception as err:
             return f'Error while parsing the expression: {err}'
         try:
-            value = self.evaluator.transform(parsed)(datetime.now())
+            value = self.eval_parsed(parsed)
         except Exception as err:
             return f'Error while evaluating the expression: {err}'
         name = CustomHandler.get_name(parsed)
@@ -134,6 +134,9 @@ class CustomHandler:
             msg += '\nWARNING: alert already triggering'
         return msg
 
+    def eval_parsed(self, parsed):
+        return self.evaluator.transform(parsed)(datetime.now())
+
 
     def eval(self, chatId, command):
         command = command.strip()
@@ -142,7 +145,7 @@ class CustomHandler:
         except Exception as err:
             return f'Error while parsing the expression: {err}'
         try:
-            value = self.evaluator.transform(parsed)(datetime.now())
+            value = self.eval_parsed(parsed)
         except Exception as err:
             return f'Error while evaluating the expression: {err}'
         return f'Result: {value}'
@@ -192,7 +195,7 @@ class CustomHandler:
             key = CustomHandler.db_key(chatId)
             toUpdate = []
             for name,(str,parsed,ts) in self.db[key].items():
-                if ts < datetime.now() and self.evaluator.transform(parsed):
+                if ts < datetime.now() and self.eval_parsed(parsed):
                     self.api.sendMessage(f'The alert {name} was triggered!! (defined as {str})', chatId)
                     toUpdate.append(name)
             tmp = dict(self.db[key])
