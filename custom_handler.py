@@ -163,9 +163,12 @@ class CustomHandler:
         custom = custom.strip()
         key = CustomHandler.db_key(chatId)
         if not custom:
-            del self.db[key]
-            self.cleanup_check(chatId)
-            return 'All alerts removed'
+            if key in self.db:
+                del self.db[key]
+                self.cleanup_check(chatId)
+                return 'All alerts removed'
+            else:
+                return 'No alerts found'
         if custom in self.db[key]:
             tmp = dict(self.db[key])
             del tmp[custom]
@@ -197,6 +200,7 @@ class CustomHandler:
             for name,(str,parsed,ts) in self.db[key].items():
                 if ts < datetime.now() and self.eval_parsed(parsed):
                     self.api.sendMessage(f'The alert {name} was triggered!! (defined as {str})', chatId)
+                    self.log.debug(f"{name} triggered: {self.eval_parsed(parsed)}")
                     toUpdate.append(name)
             tmp = dict(self.db[key])
             for name in toUpdate:
