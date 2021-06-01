@@ -141,7 +141,7 @@ class CustomHandler:
     def eval(self, chatId, command):
         command = command.strip()
         try:
-            parsed = CustomHandler.VALUE_PARSER.parse(command)
+            parsed = CustomHandler.EXPRESSION_PARSER.parse(command)
         except Exception as err:
             return f'Error while parsing the expression: {err}'
         try:
@@ -246,6 +246,9 @@ class CustomHandler:
             | condition LOGICAL_OPERATOR condition
             | value COMPARATOR value
 
+        ?expression: condition
+            | value
+
         custom: CNAME condition
 
         %import common.DIGIT
@@ -256,12 +259,11 @@ class CustomHandler:
         %ignore WS
         """
     CUSTOM_PARSER = Lark(DSL, start='custom', parser='lalr')
-    VALUE_PARSER = Lark(DSL, start='value', parser='lalr')
+    EXPRESSION_PARSER = Lark(DSL, start='expression', parser='lalr')
 
 
 if __name__ == "__main__":
-    log = logger_config.instance
-    calculator = Calculator(MarketRepository(log))
+    calculator = Calculator(MarketRepository())
     examples = [
         "martin price(btc/busd) > 20",
         "clouds price(btc/busd) > 20%",
@@ -275,18 +277,19 @@ if __name__ == "__main__":
         # "ema_test ema(eth/busd, 200, 1h) > 200",
         "ema_test abs(ema(eth/busd, 7, 1h) - ema(eth/busd, 25, 1h)) < 0.1",
     ]
-    for example in examples:
-        print(example)
-        custom = CustomHandler.CUSTOM_PARSER.parse(example)
-        print(custom)
-        print(Evaluator(calculator=calculator, visit_tokens=True).transform(custom))
-        print()
+    # for example in examples:
+    #     print(example)
+    #     custom = CustomHandler.CUSTOM_PARSER.parse(example)
+    #     print(custom)
+    #     print(Evaluator(calculator=calculator, visit_tokens=True).transform(custom))
+    #     print()
     examples_eval = [
         "abs(ema(eth/busd, 7, 1h) - ema(eth/busd, 25, 1h))",
+        "abs(ema(eth/busd, 7, 1h) - ema(eth/busd, 25, 1h)) > 1",
     ]
     for example in examples_eval:
         print(example)
-        custom = CustomHandler.VALUE_PARSER.parse(example)
+        custom = CustomHandler.EXPRESSION_PARSER.parse(example)
         print(custom)
-        print(Evaluator(calculator=calculator, visit_tokens=True).transform(custom))
+        print(Evaluator(calculator=calculator, visit_tokens=True).transform(custom)(datetime.now()))
         print()
