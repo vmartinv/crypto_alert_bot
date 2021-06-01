@@ -77,15 +77,15 @@ class Evaluator(Transformer):
         def calc(time):
             time = time.replace(second = 0, microsecond =0)
             # time = time.replace(minute = 0)
-            sma_first = time - timedelta(minutes = window*interval*2)
+            sma_first = time - timedelta(minutes = window*interval*3)
             averages = [self.repository.get_values(fsym, tsym, sma_first + timedelta(minutes = (x+1)*interval - 1))['close'] for x in range(window)]
             sma = mean(averages)
             ema = sma
             weight = 2.0 / (1+window)
             # print(f"calculating ema for window={window} , interval={interval}, pair={fsym}/{tsym}, time={time}")
-            ema_first = time - timedelta(minutes = window*interval)
+            ema_first = time - timedelta(minutes = window*interval*2)
             # print(f"SMA {ema}")
-            for x in range(window):
+            for x in range(window*2):
                 cur = ema_first + timedelta(minutes = (x+1)*interval - 1)
                 today = self.repository.get_values(fsym, tsym, cur)['close']
                 ema = today * weight + ema * (1 - weight)

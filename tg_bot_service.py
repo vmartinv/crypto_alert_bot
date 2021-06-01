@@ -16,10 +16,7 @@ class TgBotService(object):
         if "text" not in message:
             print(F"IGNORING [NO TEXT] {message}")
             return
-        if('entities' in message and message['entities'][0]['type'] == 'bot_command'):
-            self.command_handler.dispatch(message)
-        else:
-            print(F"IGNORING [NON-COMMAND] {message}")
+        self.command_handler.dispatch(message)
 
     def processUpdates(self, updates):
         for update in updates:
