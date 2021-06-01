@@ -10,6 +10,7 @@ from command_handler import CommandHandler
 from custom_handler import CustomHandler
 from tg_api import TgApi
 from sqlitedict import SqliteDict
+from calculator import Calculator
 
 class TgBotService(object):
     def processMessage(self, message):
@@ -40,12 +41,12 @@ class TgBotService(object):
             pickle.dump(self.db, fp)
 
     def run(self):
-        self.log = logger_config.instance
+        self.log = logger_config.get_logger(__name__)
         self.db = SqliteDict(config.DB_FILENAME)
-        self.api = TgApi(self.log)
-        self.repository = MarketRepository(self.log)
-        self.customHandler = CustomHandler(self.db, self.repository, self.api)
-        self.command_handler = CommandHandler(self.api, self.repository, self.db, self.log, self.customHandler)
+        self.api = TgApi()
+        calculator = Calculator(MarketRepository())
+        self.customHandler = CustomHandler(self.db, calculator, self.api)
+        self.command_handler = CommandHandler(self.api, self.db, self.customHandler)
 
         self.log.debug("db at start: {}".format(self.db))
         self.last_update = self.db['last_update'] if 'last_update' in self.db else 0

@@ -6,15 +6,15 @@ from requests.adapters import HTTPAdapter
 
 from repository.market import MarketRepository
 import config
+import logger_config
 
 
 class CommandHandler:
 
-    def __init__(self, api, repository, db, log, customHandler):
-        self.repository = repository
+    def __init__(self, api, db, customHandler):
         self.db = db
         self.api = api
-        self.log = log
+        self.log = logger_config.get_logger(__name__)
         self.customHandler = customHandler
         with open(config.HELP_FILENAME, 'r') as fp:
             self.help_file = fp.read()

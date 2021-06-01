@@ -113,7 +113,8 @@ nohup.out*
 secrets.py
 charts/*.png
 
-log/*.log
+log/error.log
+log/debug.log*
 
 daemon.pid
 .DS_Store

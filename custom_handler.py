@@ -5,13 +5,15 @@ from repository.market import MarketRepository
 from datetime import datetime, timedelta
 from sqlitedict import SqliteDict
 from statistics import mean
+from calculator import Calculator
+import logger_config
 import types
 
 class Evaluator(Transformer):
 
-    def __init__(self, repository, *args, **kwargs):
+    def __init__(self, calculator, *args, **kwargs):
         super(Evaluator, self).__init__(*args, **kwargs)
-        self.repository = repository
+        self.calculator = calculator
 
     INT = int
     CNAME = str
@@ -21,7 +23,7 @@ class Evaluator(Transformer):
     SIGNED_NUMBER = float
 
     def number(self, x):
-        return float(x[0])
+        return lambda t: float(x[0])
 
     def minutes(self, x):
         return int(x[0])
@@ -33,7 +35,7 @@ class Evaluator(Transformer):
         return int(x[0])*60*24
 
     def percentage(self, x):
-        return float(x[0])/100
+        return lambda t: float(x[0])/100
 
     def MATH_OPERATOR(self, c):
         if c=='+':
@@ -69,37 +71,20 @@ class Evaluator(Transformer):
 
     def price(self, args):
         fsym, tsym = args[0]
-        return lambda t: self.repository.get_values(fsym, tsym, t)['open']
+        return lambda t: self.calculator.price(fsym, tsym, t)
 
     def ema(self, args):
         (fsym, tsym), window, interval = args
-        window = int(window)
-        def calc(time):
-            time = time.replace(second = 0, microsecond =0)
-            # time = time.replace(minute = 0)
-            sma_first = time - timedelta(minutes = window*interval*3)
-            averages = [self.repository.get_values(fsym, tsym, sma_first + timedelta(minutes = (x+1)*interval - 1))['close'] for x in range(window)]
-            sma = mean(averages)
-            ema = sma
-            weight = 2.0 / (1+window)
-            # print(f"calculating ema for window={window} , interval={interval}, pair={fsym}/{tsym}, time={time}")
-            ema_first = time - timedelta(minutes = window*interval*2)
-            # print(f"SMA {ema}")
-            for x in range(window*2):
-                cur = ema_first + timedelta(minutes = (x+1)*interval - 1)
-                today = self.repository.get_values(fsym, tsym, cur)['close']
-                ema = today * weight + ema * (1 - weight)
-                # print(f"EMA({x}) {ema} (cur={cur}, today={today})")
-            return ema
-        return calc
+        return lambda t: self.calculator.ema(fsym, tsym, int(window(t)), interval, t)
 
-    def current(self, args):
-        return args[0](datetime.now())
+    def sma(self, args):
+        (fsym, tsym), window, interval = args
+        return lambda t: self.calculator.sma(fsym, tsym, int(window(t)), interval, t)
 
     def condition(self, cond):
         if cond[0] is None or cond[2] is None:
             return False
-        return cond[1](cond[0], cond[2])
+        return lambda t: cond[1](cond[0](t), cond[2](t))
 
     def math_op(self, args):
         return lambda t: args[1](args[0](t), args[2](t))
@@ -112,12 +97,13 @@ class Evaluator(Transformer):
         return cond
 
 class CustomHandler:
-    def __init__(self, db, repository, api):
+    def __init__(self, db, calculator, api):
         self.db = db
+        self.log = logger_config.get_logger(__name__)
         self.api = api
         if 'chats' not in self.db:
             self.db['chats'] = set()
-        self.evaluator = Evaluator(repository=repository, visit_tokens=True)
+        self.evaluator = Evaluator(calculator=calculator, visit_tokens=True)
 
     @staticmethod
     def db_key(chatId):
@@ -130,7 +116,7 @@ class CustomHandler:
         except Exception as err:
             return f'Error while parsing the expression: {err}'
         try:
-            value = self.evaluator.transform(parsed)
+            value = self.evaluator.transform(parsed)(datetime.now())
         except Exception as err:
             return f'Error while evaluating the expression: {err}'
         name = CustomHandler.get_name(parsed)
@@ -156,7 +142,7 @@ class CustomHandler:
         except Exception as err:
             return f'Error while parsing the expression: {err}'
         try:
-            value = self.evaluator.transform(parsed)
+            value = self.evaluator.transform(parsed)(datetime.now())
         except Exception as err:
             return f'Error while evaluating the expression: {err}'
         return f'Result: {value}'
@@ -238,17 +224,17 @@ class CustomHandler:
             | "+"
             | "*"
             | "/"
-        ?time_dep_value: "price" "(" pair ")" -> price
-            | "ema" "(" pair "," number "," time_interval ")"         -> ema
-            | time_dep_value MATH_OPERATOR time_dep_value -> math_op
-            | "abs" "(" time_dep_value ")" -> absolut
-            // | "rsi" "(" pair "," time_interval "," number ")"         -> rsi
-            // | "change" "(" time_dep_value ("," time_interval)? ")"      -> change
         ?value: percentage
             | number
-            | time_dep_value      -> current
-            // | "max" "(" time_dep_value "," time_interval ")"         -> max
-            // | "min" "(" time_dep_value "," time_interval ")"         -> min
+            | "price" "(" pair ")" -> price
+            | "ema" "(" pair "," number "," time_interval ")"         -> ema
+            | "sma" "(" pair "," number "," time_interval ")"         -> sma
+            | value MATH_OPERATOR value -> math_op
+            | "abs" "(" value ")" -> absolut
+            // | "rsi" "(" pair "," time_interval "," number ")"         -> rsi
+            // | "change" "(" value ("," time_interval)? ")"      -> change
+            // | "max" "(" value "," time_interval ")"         -> max
+            // | "min" "(" value "," time_interval ")"         -> min
         ?condition: "(" condition ")"
             | condition LOGICAL_OPERATOR condition
             | value COMPARATOR value
@@ -268,7 +254,7 @@ class CustomHandler:
 
 if __name__ == "__main__":
     log = logger_config.instance
-    repository = MarketRepository(log)
+    calculator = Calculator(MarketRepository(log))
     examples = [
         "martin price(btc/busd) > 20",
         "clouds price(btc/busd) > 20%",
@@ -286,7 +272,7 @@ if __name__ == "__main__":
         print(example)
         custom = CustomHandler.CUSTOM_PARSER.parse(example)
         print(custom)
-        print(Evaluator(repository=repository, visit_tokens=True).transform(custom))
+        print(Evaluator(calculator=calculator, visit_tokens=True).transform(custom))
         print()
     examples_eval = [
         "abs(ema(eth/busd, 7, 1h) - ema(eth/busd, 25, 1h))",
@@ -295,5 +281,5 @@ if __name__ == "__main__":
         print(example)
         custom = CustomHandler.VALUE_PARSER.parse(example)
         print(custom)
-        print(Evaluator(repository=repository, visit_tokens=True).transform(custom))
+        print(Evaluator(calculator=calculator, visit_tokens=True).transform(custom))
         print()

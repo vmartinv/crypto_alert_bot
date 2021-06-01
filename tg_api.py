@@ -4,12 +4,13 @@ from requests.adapters import HTTPAdapter
 
 from datetime import datetime
 import config
+import logger_config
 
 
 class TgApi:
     TG_BASE_URL = "https://api.telegram.org"
-    def __init__(self, log):
-        self.log = log
+    def __init__(self):
+        self.log = logger_config.get_logger(__name__)
         self.request_session = requests.Session()
         retries = Retry(total=5,
                         backoff_factor=0.1,

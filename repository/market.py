@@ -11,10 +11,11 @@ from secrets import BINANCE_API_KEY, BINANCE_SECRET_KEY
 from binance import Client, ThreadedWebsocketManager, ThreadedDepthCacheManager
 from config import PRICES_DB_FILENAME
 from sqlitedict import SqliteDict
+import logger_config
 
 class MarketRepository(object):
-    def __init__(self, log):
-        self.log = log
+    def __init__(self):
+        self.log = logger_config.get_logger(__name__)
         # cryptocompare._set_api_key_parameter(CC_API_KEY)
         self.db = SqliteDict(PRICES_DB_FILENAME)
         self.bnb = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
@@ -27,12 +28,18 @@ class MarketRepository(object):
     def fetch_data(self, fsym, tsym, time):
         last_key = f'{fsym}/{tsym}@last_available'
         if last_key in self.db and time>self.db[last_key] and time-self.db[last_key] < timedelta(minutes=500):
-            self.log.info(f'Querying last 10 minutes to binance for symbol {fsym}{tsym}')
+            self.log.info(f'Querying last minutes to binance for symbol {fsym}{tsym}')
             start = self.db[last_key]
             end = min(datetime.now(), start + timedelta(minutes=501))
             limit=500+50
         else:
-            self.log.info(f'Long querying to binance for symbol {fsym}{tsym}, datetime={time}')
+            self.log.info(f'Long querying to binance for symbol {fsym}{tsym}, datetime={time}, last_key={last_key}')
+            if last_key in self.db:
+                self.log.debug(f"result={self.db[last_key]}")
+                self.log.debug(f"result={time>self.db[last_key] and time-self.db[last_key] < timedelta(minutes=500)}")
+                self.log.debug(f"result={time-self.db[last_key] < timedelta(minutes=500)}")
+                self.log.debug(f"result={time-self.db[last_key]}")
+                self.log.debug(f"result={timedelta(minutes=500)}")
             if time.hour>=12:
                 start = time.replace(hour=12)
             else:
@@ -40,6 +47,7 @@ class MarketRepository(object):
             end = start+timedelta(hours=12)+timedelta(minutes=1)
             limit=12*60+1+10
         assert limit<=1000
+        self.log.debug(f"querying {fsym}{tsym} start={start}, end={end}")
         data = self.bnb.get_historical_klines(
                 f"{fsym}{tsym}",
                 Client.KLINE_INTERVAL_1MINUTE,
@@ -47,19 +55,24 @@ class MarketRepository(object):
                 int(end.timestamp())*1000,
                 limit=limit
             )
-        if last_key in self.db:
-            self.db[last_key] = max(self.db[last_key], end)
-        else:
-            self.db[last_key] = end
         self.add_data(fsym, tsym, data)
 
     def add_data(self, fsym, tsym, data):
+        mx = 0
         for point in data:
-            key = f"{fsym}/{tsym}@{point[0]//1000}"
+            time = point[0]//1000
+            key = f"{fsym}/{tsym}@{time}"
+            mx = max(mx, time)
             cols = "open,high,low,close,volume".split(',')
             self.db[key] = {
                 name: float(point[pos+1]) for pos,name in enumerate(cols)
             }
+        last_key = f'{fsym}/{tsym}@last_available'
+        end = datetime.fromtimestamp(mx)
+        if last_key in self.db:
+            self.db[last_key] = max(self.db[last_key], end)
+        else:
+            self.db[last_key] = end
         self.db.commit()
 
     def fetch_data_cc(self, fsym, tsym, time):
@@ -69,6 +82,7 @@ class MarketRepository(object):
             del point['conversionType']
             del point['conversionSymbol']
             self.db[key] = point
+        self.db.commit()
 
     def get_values(self, fsym, tsym, time):
         if not self.is_pair_valid(fsym, tsym):
