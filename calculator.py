@@ -23,7 +23,7 @@ class Calculator:
 
     def sma(self, fun, window, interval, time, upwards=None):
         sma_first = time - timedelta(minutes = window*interval)
-        sum_closes = sum(Calculator.adj(upwards, fun(sma_first + timedelta(minutes = (x+1)*interval - 1))) for x in range(window))
+        sum_closes = sum(Calculator.adj(upwards, fun(sma_first + timedelta(minutes = (x+1)*interval))) for x in range(window))
         return sum_closes / window
 
     def smma(self, fun, window, interval, time, rec, alpha, upwards=None):
