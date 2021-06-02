@@ -4,9 +4,9 @@ import math
 import collections
 import os
 from exceptions import InvalidPairException
-from secrets import CC_API_KEY
-os.environ['CRYPTOCOMPARE_API_KEY'] = CC_API_KEY
-from cryptocompare import cryptocompare
+# from secrets import CC_API_KEY
+# os.environ['CRYPTOCOMPARE_API_KEY'] = CC_API_KEY
+# from cryptocompare import cryptocompare
 from secrets import BINANCE_API_KEY, BINANCE_SECRET_KEY
 from binance import Client, ThreadedWebsocketManager, ThreadedDepthCacheManager
 from config import PRICES_DB_FILENAME
@@ -19,11 +19,7 @@ class MarketRepository(object):
         # cryptocompare._set_api_key_parameter(CC_API_KEY)
         self.db = SqliteDict(PRICES_DB_FILENAME)
         self.bnb = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
-        self.symbols = cryptocompare.get_coin_list()
-
-    TSYMS = ['BTC','USD','EUR','SEK','IRR','JPY','CNY','GBP','CAD','AUD','RUB','INR','USDT','ETH','BUSD']
-    def is_pair_valid(self, fsym, tsym):
-        return fsym in self.symbols.keys() and tsym in self.TSYMS
+        # self.symbols = cryptocompare.get_coin_list()
 
     def fetch_data(self, fsym, tsym, time):
         last_key = f'{fsym}/{tsym}@last_available'
@@ -75,18 +71,16 @@ class MarketRepository(object):
             self.db[last_key] = end
         self.db.commit()
 
-    def fetch_data_cc(self, fsym, tsym, time):
-        data = cryptocompare.get_historical_price_minute(fsym, tsym, limit=2000, exchange='CCCAGG', toTs=time)
-        for point in data:
-            key = f"{fsym}/{tsym}@{point['time']}"
-            del point['conversionType']
-            del point['conversionSymbol']
-            self.db[key] = point
-        self.db.commit()
+    # def fetch_data_cc(self, fsym, tsym, time):
+    #     data = cryptocompare.get_historical_price_minute(fsym, tsym, limit=2000, exchange='CCCAGG', toTs=time)
+    #     for point in data:
+    #         key = f"{fsym}/{tsym}@{point['time']}"
+    #         del point['conversionType']
+    #         del point['conversionSymbol']
+    #         self.db[key] = point
+    #     self.db.commit()
 
     def get_values(self, fsym, tsym, time):
-        if not self.is_pair_valid(fsym, tsym):
-            raise InvalidPairException(fsym, tsym)
         time = time.replace(second=0, microsecond=0)
         key = f'{fsym}/{tsym}@{int(time.timestamp())}'
         if key not in self.db:
