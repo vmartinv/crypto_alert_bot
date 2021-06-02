@@ -1,6 +1,6 @@
 A telegram bot with a powerful DSL to create alerts based on crypto prices and indicators. It uses Binance API.
 
-**It supports following commands**
+**It supports the following commands**
 
 **/create <ALERT NAME> <ALERT CONDITION>**  
 Get notified when the specified condition gets triggered. Alerts fire at most once per hour.
@@ -35,4 +35,4 @@ Clear all alerts.
 See this message.
 
 **Source**
-https://github.com/vmartinv/price_alert_bot/
+https://github.com/vmartinv/crypto_alert_bot/
