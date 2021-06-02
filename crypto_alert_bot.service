@@ -1,0 +1,12 @@
+[Unit]
+Description=Crypto alert bot
+
+[Service]
+Type=simple
+StandardOutput=null
+StandardError=journal
+WorkingDirectory=%h/crypto_alert_bot
+ExecStart=%h/crypto_alert_bot/run.sh
+
+[Install]
+WantedBy=default.target

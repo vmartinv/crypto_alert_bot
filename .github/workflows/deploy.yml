@@ -1,9 +1,9 @@
 name: Deploy
 
 on:
-  # Triggers the workflow on push events but only for the master branch
+  # Triggers the workflow on push events but only for the main branch
   push:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   build:
@@ -24,4 +24,4 @@ jobs:
         env:
           DEPLOY_SERVER_IP: ${{ secrets.DEPLOY_SERVER_IP }}
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
-        run: ssh -t deployer@$DEPLOY_SERVER_IP "cd $DEPLOY_DIR && git checkout . && git checkout master && git fetch --all && git reset --hard origin/master && git pull && bash -ic '{ cd $DEPLOY_DIR && ./daemon_run.sh ;} & disown'"
+        run: ssh -t deployer@$DEPLOY_SERVER_IP "cd $DEPLOY_DIR && git checkout . && git checkout main && git fetch --all && git reset --hard origin/main && git pull && mkdir -p ../.config/systemd/user && cp crypto_alert_bot.service ../.config/systemd/user/ && systemctl --user daemon-reload && systemctl enable --user crypto_alert_bot && systemctl restart --user crypto_alert_bot && sleep 10 && systemctl status --user crypto_alert_bot && tail log/debug.log"
