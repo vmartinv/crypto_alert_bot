@@ -28,7 +28,8 @@ class Evaluator(Transformer):
     CANDLE_VALS = str
 
     def number(self, x):
-        return (None, lambda t: float(x[0]))
+        n = float(x[0])
+        return (f"{n:.2E}", lambda t: n)
 
     def minutes(self, x):
         return int(x[0])
@@ -40,35 +41,36 @@ class Evaluator(Transformer):
         return int(x[0])*60*24
 
     def percentage(self, x):
-        return (None, lambda t: float(x[0])/100)
+        n = float(x[0])/100
+        return (f"{n:.2E}", lambda t: n)
 
     def MATH_OPERATOR(self, c):
         if c=='+':
-            return lambda a,b: a+b
+            return (c, lambda a,b: a+b)
         elif c=='-':
-            return lambda a,b: a-b
+            return (c, lambda a,b: a-b)
         elif c=='*':
-            return lambda a,b: a*b
+            return (c, lambda a,b: a*b)
         elif c=='/':
-            return lambda a,b: a/b
+            return (c, lambda a,b: a/b)
         raise Exception(f"Unknown MATH_OPERATOR {c}")
 
     def COMPARATOR(self, c):
         if c=='>':
-            return lambda a,b: a>b
+            return (c, lambda a,b: a>b)
         elif c=='>=':
-            return lambda a,b: a>=b
+            return (c, lambda a,b: a>=b)
         elif c=='<=':
-            return lambda a,b: a<=b
+            return (c, lambda a,b: a<=b)
         elif c=='<':
-            return lambda a,b: a<b
+            return (c, lambda a,b: a<b)
         raise Exception(f"Unknown comparator {c}")
 
     def LOGICAL_OPERATOR(self, c):
         if c=='and':
-            return lambda a,b: a and b
+            return (c, lambda a,b: a and b)
         elif c=='or':
-            return lambda a,b: a or b
+            return (c, lambda a,b: a or b)
         raise Exception(f"Unknown logical operator {c}")
 
     def pair(self, args):
@@ -157,14 +159,24 @@ class Evaluator(Transformer):
             calc
         )
 
-    def condition(self, cond):
-        return (None, lambda t: cond[1](cond[0][1](t), cond[2][1](t)))
+    def condition(self, args):
+        (p_desc, p), (c_desc, c), (q_desc, q) = args
+        return (f"({p_desc}){c_desc}({q_desc})", lambda t: c(p(t), q(t)))
 
     def math_op(self, args):
-        return (None, lambda t: args[1](args[0][1](t), args[2][1](t)))
+        (p_desc, p), (c_desc, c), (q_desc, q) = args
+        return (f"({p_desc}){c_desc}({q_desc})", lambda t: c(p(t), q(t)))
 
     def absolut(self, args):
-        return (None, lambda t: abs(args[0][1](t)))
+        (desc, fun) = args[0]
+        return (f"abs({desc})", lambda t: abs(fun(t)))
+
+    def if_exp(self, args):
+        (c_desc, c), (p_desc, p), (q_desc, q) = args
+        return (
+            f"if({c_desc})({p_desc})({q_desc})",
+            lambda t: p(t) if c(t) else q(t)
+        )
 
     def expression(self, args):
         return lambda t: args[0][1](t)
@@ -318,7 +330,9 @@ class CustomHandler:
             | number
             | CANDLE_VALS "(" pair ")" -> price
             | "change" "(" value "," time_interval ")"         -> change
+            | "if" "(" condition "," value "," value ")"         -> if_exp
             | "sma" "(" value "," INT "," time_interval ")"         -> sma
+            | "smma" "(" value "," INT "," time_interval ")"         -> smma
             | "ema" "(" value "," INT "," time_interval ")"         -> ema
             | value MATH_OPERATOR value -> math_op
             | "abs" "(" value ")" -> absolut

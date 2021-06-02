@@ -12,9 +12,9 @@ Example:
 Operators:
 - Math: `+, -, *, /, abs`
 - Comparison: `<, >, <=, >=`
-- Logical: `and, or`
+- Logical: `and, or, if`
 - Basic queries: `price, open, close, high, log, volume`
-- Aggregate functions: `change, sma, ema, rsi`
+- Aggregate functions: `change, sma, smma, ema, rsi`
 
 **/eval <EXPRESSION>**  
 Gets the value of an expression,
