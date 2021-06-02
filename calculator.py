@@ -30,7 +30,7 @@ class Calculator:
         smma_prev = time - timedelta(minutes = interval)
         smma = rec(smma_prev)
         if smma is None:
-            self.log.info(f"Calculating smma from scratch for window={window}, interval={interval}, time={time}")
+            self.log.info(f"Calculating smma from scratch for window={window}, interval={interval}, time={time}, upwards={upwards}")
             smma_prev = time - timedelta(minutes = window*interval*2)
             smma = self.sma(fun, window, interval, smma_prev, upwards=upwards)
         while smma_prev < time:

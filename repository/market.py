@@ -19,17 +19,19 @@ class MarketRepository(object):
         # cryptocompare._set_api_key_parameter(CC_API_KEY)
         self.db = SqliteDict(PRICES_DB_FILENAME)
         self.bnb = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
+        tot_pairs = sum(1 for k in self.db.keys() if k.endswith("@last_available"))
+        self.log.info(f"Loaded market db with {len(self.db)-tot_pairs} minute prices loaded from {tot_pairs} pairs")
         # self.symbols = cryptocompare.get_coin_list()
 
     def fetch_data(self, fsym, tsym, time):
         last_key = f'{fsym}/{tsym}@last_available'
         if last_key in self.db and time>self.db[last_key] and time-self.db[last_key] < timedelta(minutes=500):
-            self.log.info(f'Querying last minutes to binance for symbol {fsym}{tsym}')
+            self.log.debug(f'Querying last minutes to binance for symbol {fsym}{tsym}')
             start = self.db[last_key]
             end = min(datetime.now(), start + timedelta(minutes=501))
             limit=500+50
         else:
-            self.log.info(f'Long querying to binance for symbol {fsym}{tsym}, datetime={time}, last_key={last_key}')
+            self.log.debug(f'Long querying to binance for symbol {fsym}{tsym}, datetime={time}, last_key={last_key}')
             if last_key in self.db:
                 self.log.debug(f"result={self.db[last_key]}")
                 self.log.debug(f"result={time>self.db[last_key] and time-self.db[last_key] < timedelta(minutes=500)}")
@@ -43,7 +45,7 @@ class MarketRepository(object):
             end = start+timedelta(hours=12)+timedelta(minutes=1)
             limit=12*60+1+10
         assert limit<=1000
-        self.log.debug(f"querying {fsym}{tsym} start={start}, end={end}")
+        self.log.info(f"Querying Binance for {fsym}{tsym} start={start}, end={end}")
         data = self.bnb.get_historical_klines(
                 f"{fsym}{tsym}",
                 Client.KLINE_INTERVAL_1MINUTE,

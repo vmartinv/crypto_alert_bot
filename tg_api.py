@@ -21,7 +21,8 @@ class TgApi:
         return f'{TgApi.TG_BASE_URL}/bot{config.TG_TOKEN}/{methodName}'
 
     def sendMessage(self, msg, chatid, parse_mode=None):
-        self.log.debug(f"sending msg to {chatid} '{msg}'")
+        formatted_msg = msg.replace('\n', '#')[:1000]
+        self.log.debug(f"sending msg to {chatid} '{formatted_msg}'")
         url = self.getTgUrl('sendMessage')
         r = requests.post(url=url, data={
             'chat_id': chatid,

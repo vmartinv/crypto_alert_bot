@@ -14,8 +14,8 @@ def get_logger(name = ""):
     # add ch to logger
     logger.addHandler(ch)
 
-    th = logging.handlers.TimedRotatingFileHandler(filename="log/debug.log",when="midnight",encoding="utf-8",backupCount=90)
-    th.setLevel(logging.DEBUG)
+    th = logging.handlers.TimedRotatingFileHandler(filename="log/info.log",when="midnight",encoding="utf-8",backupCount=90)
+    th.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s')
     th.setFormatter(formatter)
     logger.addHandler(th)

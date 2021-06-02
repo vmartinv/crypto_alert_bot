@@ -15,7 +15,7 @@ from calculator import Calculator
 class TgBotService(object):
     def processMessage(self, message):
         if "text" not in message:
-            print(F"IGNORING [NO TEXT] {message}")
+            self.log.info(F"IGNORING [NO TEXT] {message}")
             return
         self.command_handler.dispatch(message)
 
@@ -35,11 +35,6 @@ class TgBotService(object):
             except:
                 self.log.exception(f"error processing update: {update}")
 
-
-    def persist_db(self):
-        with open(config.DB_FILENAME, 'wb') as fp:
-            pickle.dump(self.db, fp)
-
     def run(self):
         self.log = logger_config.get_logger(__name__)
         self.db = SqliteDict(config.DB_FILENAME)
@@ -48,7 +43,6 @@ class TgBotService(object):
         self.customHandler = CustomHandler(self.db, calculator, self.api)
         self.command_handler = CommandHandler(self.api, self.db, self.customHandler)
 
-        self.log.debug("db at start: {}".format(self.db))
         self.last_update = self.db['last_update'] if 'last_update' in self.db else 0
         # main loop
         loop = True
