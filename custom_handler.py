@@ -289,7 +289,7 @@ class CustomHandler:
             for name,(str,parsed,ts) in self.db[key].items():
                 if ts < datetime.now() and self.eval_parsed(parsed):
                     self.api.sendMessage(f'The alert {name} was triggered!! (defined as {str})', chatId)
-                    self.log.debug(f"{name} triggered: {self.eval_parsed(parsed)}")
+                    self.log.debug(f"{name} triggered")
                     toUpdate.append(name)
             tmp = dict(self.db[key])
             for name in toUpdate:
