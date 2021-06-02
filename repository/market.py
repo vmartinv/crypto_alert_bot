@@ -87,7 +87,7 @@ class MarketRepository(object):
         key = f'{fsym}/{tsym}@{int(time.timestamp())}'
         if key not in self.db:
             self.fetch_data(fsym, tsym, time)
-        assert key in self.db
+        assert key in self.db, f"Couldn't get price for {key}"
         return self.db[key]
 
 if __name__ == "__main__":

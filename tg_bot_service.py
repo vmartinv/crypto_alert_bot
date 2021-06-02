@@ -11,6 +11,7 @@ from custom_handler import CustomHandler
 from tg_api import TgApi
 from sqlitedict import SqliteDict
 from calculator import Calculator
+import time
 
 class TgBotService(object):
     def processMessage(self, message):
@@ -46,6 +47,7 @@ class TgBotService(object):
         self.last_update = self.db['last_update'] if 'last_update' in self.db else 0
         # main loop
         loop = True
+        last_time = 0
         while loop:
             try:
                 updates = self.api.getUpdates(self.last_update)
@@ -54,7 +56,14 @@ class TgBotService(object):
                 else:
                     self.processUpdates(updates)
                 try:
+                    start = time.time()
+                    if start-last_time>=10*60:
+                        self.log.info(f"Start checking alerts")
                     self.customHandler.process()
+                    end = time.time()
+                    if start-last_time>=10*60:
+                        last_time = end
+                        self.log.info(f"Checking alerts took {(end-start)} seconds")
                 except:
                     self.log.exception("exception at processing alerts")
                 time.sleep(1)
