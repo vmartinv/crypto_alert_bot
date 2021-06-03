@@ -20,16 +20,7 @@ class CommandHandler:
         ]
         self.add_handlers(dispatcher)
 
-    @staticmethod
-    def error_callback(update, context):
-        chatId = update.effective_chat.id
-        context.bot.send_message(
-            text="Ups I failed please check my logs",
-            chat_id=chatId
-        )
-
     def add_handlers(self, dispatcher):
-        dispatcher.add_error_handler(CommandHandler.error_callback)
         for word, fun, parse_mode in self.cmd_map:
             def run_fun(fun, parse_mode, update, context):
                 chatId = update.effective_chat.id

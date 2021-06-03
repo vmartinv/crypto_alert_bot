@@ -1,7 +1,5 @@
 [Unit]
 Description=Crypto alert bot
-Wants=network-online.target
-After=network.target network-online.target
 StartLimitBurst=5
 StartLimitIntervalSec=3600
 
