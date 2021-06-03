@@ -1,4 +1,3 @@
-from lark import Lark
 import logger_config
 from repository.market import MarketRepository
 from datetime import datetime, timedelta
@@ -6,10 +5,10 @@ from calculator import Calculator
 from evaluator import Evaluator
 
 class AlertHandler:
-    def __init__(self, db, calculator, api):
+    def __init__(self, db, calculator, bot):
         self.db = db
         self.log = logger_config.get_logger(__name__)
-        self.api = api
+        self.bot = bot
         if 'chats' not in self.db:
             self.db['chats'] = set()
         tot_alerts = sum(len(alerts) for k,alerts in self.db.items() if k.endswith('alerts'))
@@ -87,7 +86,7 @@ class AlertHandler:
             return 'Alert not found'
 
 
-    def list(self, chatId):
+    def list(self, chatId, _command):
         key = AlertHandler.db_key(chatId)
         if key in self.db:
             msg = 'Current alerts:\n'
@@ -107,7 +106,10 @@ class AlertHandler:
             toUpdate = []
             for name,(str,parsed,ts) in self.db[key].items():
                 if ts < datetime.now() and self.evaluator.eval_now(parsed):
-                    self.api.sendMessage(f'The alert {name} was triggered!! (defined as {str})', chatId)
+                    self.bot.send_message(
+                        text=f'The alert {name} was triggered!! (defined as {str})',
+                        chat_id=chatId
+                    )
                     self.log.debug(f"{name} triggered")
                     toUpdate.append(name)
             tmp = dict(self.db[key])

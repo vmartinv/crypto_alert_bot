@@ -4,69 +4,49 @@ import config
 from repository.market import MarketRepository
 from command_handler import CommandHandler
 from alert_handler import AlertHandler
-from tg_api import TgApi
 from sqlitedict import SqliteDict
 from calculator import Calculator
+from telegram.ext import Updater
 
-class TgBotService(object):
-    def processMessage(self, message):
-        if "text" not in message:
-            self.log.info(F"IGNORING [NO TEXT] {message}")
-            return
-        self.command_handler.dispatch(message)
+class TgBotService:
 
-    def processUpdates(self, updates):
-        for update in updates:
-            self.last_update = self.db['last_update'] = update['update_id']
-            if 'message' in update:
-                message = update['message']
-            elif "edited_message" in update['edited_message']:
-                message = update['edited_message']
-            else:
-                self.log.error(f"no message in update: {update}")
-                return
-
-            try:
-                self.processMessage(message)
-            except:
-                self.log.exception(f"error processing update: {update}")
-
-    def run(self):
+    def __init__(self):
         self.log = logger_config.get_logger(__name__)
         self.db = SqliteDict(config.DB_FILENAME)
-        self.api = TgApi()
         calculator = Calculator(MarketRepository())
-        self.alertHandler = AlertHandler(self.db, calculator, self.api)
-        self.command_handler = CommandHandler(self.api, self.db, self.alertHandler)
+        self.updater = Updater(token=config.TG_TOKEN, use_context=True)
+        self.alert_handler = AlertHandler(self.db, calculator, self.updater.bot)
+        command_handler = CommandHandler(self.alert_handler)
+        command_handler.add_handlers(self.updater.dispatcher)
 
-        self.last_update = self.db['last_update'] if 'last_update' in self.db else 0
-        # main loop
+
+    def run(self):
+        self.last_time = 0
+        self.updater.start_polling()
+        self.alert_loop()
+        self.updater.stop()
+
+    def process_alerts(self):
+        start = time.time()
+        if start-self.last_time>=10*60:
+            self.log.info("Start checking alerts")
+        self.alert_handler.process()
+        end = time.time()
+        if start-self.last_time>=10*60:
+            self.last_time = end
+            self.log.info(f"Checking alerts took {(end-start)} seconds")
+
+    def alert_loop(self):
         loop = True
-        last_time = 0
         while loop:
             try:
-                updates = self.api.getUpdates(self.last_update)
-                if updates is None:
-                    self.log.error('get update request failed')
-                else:
-                    self.processUpdates(updates)
-                try:
-                    start = time.time()
-                    if start-last_time>=10*60:
-                        self.log.info("Start checking alerts")
-                    self.alertHandler.process()
-                    end = time.time()
-                    if start-last_time>=10*60:
-                        last_time = end
-                        self.log.info(f"Checking alerts took {(end-start)} seconds")
-                except:
-                    self.log.exception("exception at processing alerts")
+                self.process_alerts()
                 time.sleep(1)
             except KeyboardInterrupt:
-                self.log.info("interrupt received, stopping…")
+                self.log.info("interrupt received, stopping...")
                 loop = False
-            except:
-                self.log.exception("exception at processing updates")
+            except Exception as err:
+                self.log.exception(f"Exception at processing alerts {err}")
                 loop = False
 
             self.db.commit()

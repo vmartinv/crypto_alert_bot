@@ -1,47 +1,42 @@
 import config
 import logger_config
+import telegram.ext
 
 
 class CommandHandler:
 
-    def __init__(self, api, db, alertHandler):
-        self.db = db
-        self.api = api
+    def __init__(self, alert_handler):
         self.log = logger_config.get_logger(__name__)
-        self.alertHandler = alertHandler
+        self.alert_handler = alert_handler
         with open(config.HELP_FILENAME, 'r') as fp:
             self.help_file = fp.read()
         self.cmd_map = [
-            ('start', self.help),
-            ('help', self.help),
-            ('list', self.list),
-            ('remove', self.remove),
-            ('create', self.create),
-            ('eval', self.eval),
+            ('start', self.help, "Markdown"),
+            ('help', self.help, "Markdown"),
+            ('list', self.alert_handler.list, None),
+            ('remove', self.alert_handler.remove, None),
+            ('create', self.alert_handler.create, None),
+            ('eval', self.alert_handler.eval, None),
         ]
 
-    def dispatch(self, message):
-            text = message['text']
-            chatId = message['chat']['id']
-            command = text.partition('/')[2].strip()
-            self.log.info('handling command "{}"...'.format(command))
-            for word, fun in self.cmd_map:
-                if command.startswith(word):
-                    fun(chatId, command[len(word):])
-                    return
-            self.api.sendMessage('Unknown command', chatId)
+    def add_handlers(self, dispatcher):
+        for word, fun, parse_mode in self.cmd_map:
+            def run_fun(fun, parse_mode, update, context):
+                chatId = update.effective_chat.id
+                command = ' '.join(context.args)
+                context.bot.send_message(
+                    text=fun(chatId, command),
+                    parse_mode=parse_mode,
+                    chat_id=chatId
+                )
+            handler = telegram.ext.CommandHandler(word, lambda update, context, fun=fun, parse_mode=parse_mode: run_fun(fun, parse_mode, update, context)
+            )
+            dispatcher.add_handler(handler)
+        unknown_handler = telegram.ext.MessageHandler(telegram.ext.Filters.command, self.unknown)
+        dispatcher.add_handler(unknown_handler)
 
-    def remove(self, chatId, command):
-        self.api.sendMessage(self.alertHandler.remove(chatId, command), chatId)
+    def unknown(self, update, context):
+        context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
 
-    def create(self, chatId, command):
-        self.api.sendMessage(self.alertHandler.create(chatId, command), chatId)
-
-    def eval(self, chatId, command):
-        self.api.sendMessage(self.alertHandler.eval(chatId, command), chatId)
-
-    def help(self, chatId, command):
-        self.api.sendMessage(self.help_file, chatId, "Markdown")
-
-    def list(self, chatId, command):
-        self.api.sendMessage(self.alertHandler.list(chatId), chatId)
+    def help(self, chatId, _command):
+        return self.help_file
