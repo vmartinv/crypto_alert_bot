@@ -3,7 +3,7 @@ import logger_config
 import config
 from repository.market import MarketRepository
 from command_handler import CommandHandler
-from custom_handler import CustomHandler
+from alert_handler import AlertHandler
 from tg_api import TgApi
 from sqlitedict import SqliteDict
 from calculator import Calculator
@@ -36,8 +36,8 @@ class TgBotService(object):
         self.db = SqliteDict(config.DB_FILENAME)
         self.api = TgApi()
         calculator = Calculator(MarketRepository())
-        self.customHandler = CustomHandler(self.db, calculator, self.api)
-        self.command_handler = CommandHandler(self.api, self.db, self.customHandler)
+        self.alertHandler = AlertHandler(self.db, calculator, self.api)
+        self.command_handler = CommandHandler(self.api, self.db, self.alertHandler)
 
         self.last_update = self.db['last_update'] if 'last_update' in self.db else 0
         # main loop
@@ -54,7 +54,7 @@ class TgBotService(object):
                     start = time.time()
                     if start-last_time>=10*60:
                         self.log.info("Start checking alerts")
-                    self.customHandler.process()
+                    self.alertHandler.process()
                     end = time.time()
                     if start-last_time>=10*60:
                         last_time = end

@@ -4,11 +4,11 @@ import logger_config
 
 class CommandHandler:
 
-    def __init__(self, api, db, customHandler):
+    def __init__(self, api, db, alertHandler):
         self.db = db
         self.api = api
         self.log = logger_config.get_logger(__name__)
-        self.customHandler = customHandler
+        self.alertHandler = alertHandler
         with open(config.HELP_FILENAME, 'r') as fp:
             self.help_file = fp.read()
         self.cmd_map = [
@@ -32,16 +32,16 @@ class CommandHandler:
             self.api.sendMessage('Unknown command', chatId)
 
     def remove(self, chatId, command):
-        self.api.sendMessage(self.customHandler.remove(chatId, command), chatId)
+        self.api.sendMessage(self.alertHandler.remove(chatId, command), chatId)
 
     def create(self, chatId, command):
-        self.api.sendMessage(self.customHandler.create(chatId, command), chatId)
+        self.api.sendMessage(self.alertHandler.create(chatId, command), chatId)
 
     def eval(self, chatId, command):
-        self.api.sendMessage(self.customHandler.eval(chatId, command), chatId)
+        self.api.sendMessage(self.alertHandler.eval(chatId, command), chatId)
 
     def help(self, chatId, command):
         self.api.sendMessage(self.help_file, chatId, "Markdown")
 
     def list(self, chatId, command):
-        self.api.sendMessage(self.customHandler.list(chatId), chatId)
+        self.api.sendMessage(self.alertHandler.list(chatId), chatId)

@@ -1,10 +1,72 @@
-from lark import Transformer
+from lark import Lark, Transformer
 import logger_config
 from sqlitedict import SqliteDict
 from exceptions import InvalidIndicatorSource
 from config import HANDLER_CACHE_DB_FILENAME
+from datetime import datetime
 
 class Evaluator(Transformer):
+    DSL = r"""
+        ?symbol : WORD
+        pair: symbol "/" symbol
+        TWO_DIGITS: DIGIT DIGIT?
+        time_interval: TWO_DIGITS "h"       -> hours
+        | TWO_DIGITS "d"        -> days
+        | TWO_DIGITS "m"        -> minutes
+        INDICATORS: "price"
+        | "change"
+        | "rsi"
+        | "stoch_rsi"
+        COMPARATOR: "<"
+            | ">"
+            | ">="
+            | "<="
+        LOGICAL_OPERATOR: "and"
+        | "or"
+        number: SIGNED_NUMBER
+        percentage: SIGNED_NUMBER "%"
+        MATH_OPERATOR: "-"
+        | "+"
+        | "*"
+        | "/"
+        CANDLE_VALS: "price"
+        | "open"
+        | "high"
+        | "low"
+        | "close"
+        | "volume"
+        ?value: percentage
+        | number
+        | CANDLE_VALS "(" pair ")" -> price
+        | "change" "(" value "," time_interval ")"         -> change
+        | "if" "(" condition "," value "," value ")"         -> if_exp
+        | "sma" "(" value "," INT "," time_interval ")"         -> sma
+        | "smma" "(" value "," INT "," time_interval ")"         -> smma
+        | "ema" "(" value "," INT "," time_interval ")"         -> ema
+        | value MATH_OPERATOR value -> math_op
+        | "abs" "(" value ")" -> absolut
+        | "rsi" "(" value "," INT "," time_interval ")"         -> rsi
+        // | "max" "(" value "," INT "," time_interval ")"         -> max
+        // | "min" "(" value "," INT "," time_interval ")"         -> min
+        ?condition: "(" condition ")"
+        | condition LOGICAL_OPERATOR condition
+        | value COMPARATOR value
+
+        expression: condition
+        | value
+
+        alert: CNAME condition
+
+        %import common.DIGIT
+        %import common.INT
+        %import common.CNAME
+        %import common.WORD
+        %import common.SIGNED_NUMBER
+        %import common.WS
+        %ignore WS
+    """
+    ALERT_PARSER = Lark(DSL, start='alert', parser='lalr')
+    EXPRESSION_PARSER = Lark(DSL, start='expression', parser='lalr')
 
     def __init__(self, calculator, *args, **kwargs):
         super(Evaluator, self).__init__(*args, **kwargs)
@@ -12,6 +74,9 @@ class Evaluator(Transformer):
         self.calculator = calculator
         self.db = SqliteDict(HANDLER_CACHE_DB_FILENAME, autocommit=True)
         self.log.info(f"Loaded handler cache db with {len(self.db)} entries")
+
+    def eval_now(self, parsed):
+        return self.transform(parsed)(datetime.now())
 
     INT = int
     CNAME = str
@@ -175,6 +240,6 @@ class Evaluator(Transformer):
     def expression(self, args):
         return lambda t: args[0][1](t)
 
-    def custom(self, args):
+    def alert(self, args):
         name, cond = args
         return lambda t: cond[1](t)
