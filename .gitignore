@@ -108,6 +108,7 @@ db.pickle
 cache.pickle
 
 *.sqlite
+*.sqlite-journal
 
 nohup.out*
 secrets.py

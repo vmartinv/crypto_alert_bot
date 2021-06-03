@@ -24,4 +24,5 @@ jobs:
         env:
           DEPLOY_SERVER_IP: ${{ secrets.DEPLOY_SERVER_IP }}
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
-        run: ssh -t deployer@$DEPLOY_SERVER_IP "cd $DEPLOY_DIR && git checkout . && git checkout main && git fetch --all && git reset --hard origin/main && git pull && mkdir -p ../.config/systemd/user && cp crypto_alert_bot.service ../.config/systemd/user/ && systemctl --user daemon-reload && systemctl enable --user crypto_alert_bot && ls -lh data log && systemctl restart --user crypto_alert_bot && sleep 10 && systemctl status --user crypto_alert_bot && tail log/debug.log"
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: ssh -t $DEPLOY_USER@$DEPLOY_SERVER_IP "cd $DEPLOY_DIR && git checkout . && git checkout main && git fetch --all && git reset --hard origin/main && git pull && sed -i 's/USER/$DEPLOY_USER/' crypto_alert_bot.service && sudo cp crypto_alert_bot.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable crypto_alert_bot && ls -lh data log && sudo systemctl restart crypto_alert_bot && sleep 20 && systemctl status crypto_alert_bot && tail log/info.log"
