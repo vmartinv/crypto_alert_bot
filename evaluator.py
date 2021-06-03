@@ -3,7 +3,7 @@ import logger_config
 from sqlitedict import SqliteDict
 from exceptions import InvalidIndicatorSource
 from config import HANDLER_CACHE_DB_FILENAME
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class Evaluator(Transformer):
     DSL = r"""
@@ -76,7 +76,7 @@ class Evaluator(Transformer):
         self.log.info(f"Loaded handler cache db with {len(self.db)} entries")
 
     def eval_now(self, parsed):
-        return self.transform(parsed)(datetime.now())
+        return self.transform(parsed)(datetime.now() - timedelta(seconds=2))
 
     INT = int
     CNAME = str
