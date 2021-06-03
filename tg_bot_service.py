@@ -16,8 +16,7 @@ class TgBotService:
         calculator = Calculator(MarketRepository())
         self.updater = Updater(token=config.TG_TOKEN, use_context=True)
         self.alert_handler = AlertHandler(self.db, calculator, self.updater.bot)
-        command_handler = CommandHandler(self.alert_handler)
-        command_handler.add_handlers(self.updater.dispatcher)
+        self.command_handler = CommandHandler(self.alert_handler, self.updater.dispatcher)
 
 
     def run(self):

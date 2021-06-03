@@ -3,6 +3,7 @@ from repository.market import MarketRepository
 from datetime import datetime, timedelta
 from calculator import Calculator
 from evaluator import Evaluator
+import config
 
 class AlertHandler:
     def __init__(self, db, calculator, bot):
@@ -21,6 +22,8 @@ class AlertHandler:
 
     def create(self, chatId, command):
         command = command.strip()
+        if len(command)>config.MAX_ALERT_LENGTH:
+            return f"An alert cannot contain more than {config.MAX_ALERT_LENGTH} characters and this one has {len(command)}."
         try:
             parsed = Evaluator.ALERT_PARSER.parse(command)
         except Exception as err:
@@ -38,6 +41,8 @@ class AlertHandler:
             self.db['chats'] = tmp
         tmp = dict(self.db[key])
         tmp[name] = (command, parsed, datetime.now())
+        if len(tmp)>config.MAX_ALERTS_PER_USER:
+            return f"Maximum alerts per user is {config.MAX_ALERTS_PER_USER}. Please remove some alerts before adding more."
         self.db[key] = tmp
         msg = f'Alert {name} created! Use /remove {name} to erase it.'
         if value:
