@@ -1,10 +1,3 @@
-import math, time, requests, pickle, traceback
-from datetime import datetime
-
-from urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
-
-from repository.market import MarketRepository
 import config
 import logger_config
 

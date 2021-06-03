@@ -1,8 +1,4 @@
-import traceback
-import math, time, requests, pickle, traceback
-from datetime import datetime
-from urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
+import time
 import logger_config
 import config
 from repository.market import MarketRepository
@@ -11,7 +7,6 @@ from custom_handler import CustomHandler
 from tg_api import TgApi
 from sqlitedict import SqliteDict
 from calculator import Calculator
-import time
 
 class TgBotService(object):
     def processMessage(self, message):
@@ -58,7 +53,7 @@ class TgBotService(object):
                 try:
                     start = time.time()
                     if start-last_time>=10*60:
-                        self.log.info(f"Start checking alerts")
+                        self.log.info("Start checking alerts")
                     self.customHandler.process()
                     end = time.time()
                     if start-last_time>=10*60:

@@ -1,15 +1,8 @@
-from lark import Lark, Tree, Transformer
-from collections import defaultdict
+from lark import Lark
 import logger_config
 from repository.market import MarketRepository
 from datetime import datetime, timedelta
-from sqlitedict import SqliteDict
-from statistics import mean
 from calculator import Calculator
-import logger_config
-import types
-from exceptions import InvalidIndicatorSource
-from config import HANDLER_CACHE_DB_FILENAME
 from evaluator import Evaluator
 
 class CustomHandler:

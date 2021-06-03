@@ -2,7 +2,6 @@ import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
-from datetime import datetime
 import config
 import logger_config
 

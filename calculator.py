@@ -1,6 +1,4 @@
-from repository.market import MarketRepository
-from datetime import datetime, timedelta
-from sqlitedict import SqliteDict
+from datetime import timedelta
 import logger_config
 
 class Calculator:
